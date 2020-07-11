@@ -85,10 +85,10 @@ impl World{
                     let t1 = (-b-discr.sqrt())/2.0/a;
                     let t2 = (-b+discr.sqrt())/2.0/a;
                     //Balls should never actually overlap
-                    //I don't know if rounding error can be a problem here
-                    if t1 < 0.0 && t2 > 0.0 { panic!("Overlapping balls!"); }
+                    //But rounding error can be a problem here
+                    if t1 < -0.001 && t2 > 0.001 { panic!("Overlapping balls! {}..{}",t1,t2); }
                     //If no overlap in the future, ignore
-                    if t2 < 0.0 {continue;}
+                    if t2 < 0.001 {continue;}
                     //Register collision
                     if til > t1 { til=t1; ev = PhysicsEvent::BallBallCollision(i,j); }
                 }
@@ -100,10 +100,15 @@ impl World{
                 PhysicsEvent::BallHWallCollision(i) => self.balls[i].dir.x *= -1.0,
                 PhysicsEvent::BallVWallCollision(i) => self.balls[i].dir.y *= -1.0,
                 PhysicsEvent::BallBallCollision(i,j) => {
-                    self.balls[i].dir=Vector2::new(0.0,0.0);
-                    self.balls[j].dir=Vector2::new(0.0,0.0);
+                    assert!(i!=j);
+                    //self.balls[i].dir=Vector2::new(0.0,0.0);
+                    //self.balls[j].dir=Vector2::new(0.0,0.0);
+                    let bouncedir = (self.balls[j].pos-self.balls[i].pos)/(20.0+20.0);
+                    let reldir = self.balls[j].dir-self.balls[i].dir;
+                    let impulse = bouncedir.dot(&reldir)*bouncedir;
+                    self.balls[i].dir+=impulse;
+                    self.balls[j].dir-=impulse;
                 }
-
             }
         }
     }
