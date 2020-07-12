@@ -180,6 +180,10 @@ impl EventHandler for World{
                             overlap = true;
                         }
                     }
+                    if ball.pos.x < 20.0 || ball.pos.x > 500.0-20.0 ||
+                        ball.pos.y < 20.0 || ball.pos.y > 500.0-20.0 {
+                            overlap = true;
+                        }
                     if overlap {
                         println!("There's already something there.");
                     }else{
