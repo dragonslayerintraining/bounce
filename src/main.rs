@@ -16,6 +16,7 @@ fn main() -> GameResult{
 struct Ball{
     pos: Point2<f32>,
     dir: Vector2<f32>,
+    radius: f32,
 }
 
 struct World{
@@ -54,10 +55,10 @@ impl World{
             for j in 0..5 {
                 let x = (i as f32)*80.0+50.0;
                 let y = (j as f32)*80.0+50.0;
-                balls.push(Ball{pos:Point2::new(x,y),dir:Vector2::new(0.0,0.0)});
+                balls.push(Ball{pos:Point2::new(x,y),dir:Vector2::new(0.0,0.0),radius:5.0});
             }
         }
-        balls.push(Ball{pos:Point2::new(50.0,450.0),dir:Vector2::new(-10.0,50.0)});
+        balls.push(Ball{pos:Point2::new(50.0,450.0),dir:Vector2::new(-10.0,50.0),radius:20.0});
         
         World{
             balls: balls,
@@ -68,6 +69,7 @@ impl World{
             balls: vec![],
             ghost: None,
         }
+        
     }
     fn simple_update(&mut self, dt: f32) {
         for ball in &mut self.balls {
@@ -81,19 +83,19 @@ impl World{
             let mut ev: PhysicsEvent = PhysicsEvent::NoEvent;
             for (i, ball) in self.balls.iter().enumerate() {
                 if ball.dir.x < 0.0 {
-                    let t = (20.0-ball.pos.x)/ball.dir.x;
+                    let t = (ball.radius-ball.pos.x)/ball.dir.x;
                     if til > t { til=t; ev = PhysicsEvent::BallHWallCollision(i); }
                 }
                 if ball.dir.x > 0.0 {
-                    let t = (500.0-20.0-ball.pos.x)/ball.dir.x;
+                    let t = (500.0-ball.radius-ball.pos.x)/ball.dir.x;
                     if til > t { til=t; ev = PhysicsEvent::BallHWallCollision(i); }
                 }
                 if ball.dir.y < 0.0 {
-                    let t = (20.0-ball.pos.y)/ball.dir.y;
+                    let t = (ball.radius-ball.pos.y)/ball.dir.y;
                     if til > t { til=t; ev = PhysicsEvent::BallVWallCollision(i); }
                 }
                 if ball.dir.y > 0.0 {
-                    let t = (500.0-20.0-ball.pos.y)/ball.dir.y;
+                    let t = (500.0-ball.radius-ball.pos.y)/ball.dir.y;
                     if til > t { til=t; ev = PhysicsEvent::BallVWallCollision(i); }
                 }
             }
@@ -107,7 +109,7 @@ impl World{
                     //Rewrite as the quadratic at^2+bt+c=0
                     let a = reldir.dot(&reldir);
                     let b = 2.0*reldir.dot(&relpos);
-                    let c = relpos.dot(&relpos)-(20.0+20.0)*(20.0+20.0);
+                    let c = relpos.dot(&relpos)-(ball1.radius+ball2.radius)*(ball1.radius+ball2.radius);
                     if let Some((t1,t2)) = solve_quadratic(a,b,c) {
                     assert!(t1<=t2);
                     //Balls should never actually overlap
@@ -140,6 +142,9 @@ impl World{
                 }
             }
         }
+        if let Some(ball) = &mut self.ghost {
+            ball.radius+=0.1;
+        }
     }
 }
 
@@ -150,12 +155,12 @@ impl EventHandler for World{
     }
     fn draw(&mut self,ctx:&mut Context) -> GameResult{
         graphics::clear(ctx,graphics::WHITE);
-        let circle = graphics::Mesh::new_circle(ctx,graphics::DrawMode::fill(),ggez::nalgebra::Point2::new(0.0,0.0),20.0,0.1,graphics::BLACK)?;
         for ball in &self.balls {
+            let circle = graphics::Mesh::new_circle(ctx,graphics::DrawMode::fill(),ggez::nalgebra::Point2::new(0.0,0.0),ball.radius,0.1,graphics::BLACK)?;
             graphics::draw(ctx,&circle,(ball.pos,))?;
         }
-        let ghost_circle = graphics::Mesh::new_circle(ctx,graphics::DrawMode::fill(),ggez::nalgebra::Point2::new(0.0,0.0),20.0,2.0,[0.0,0.0,0.0,0.5].into())?;
         if let Some(ball) = &self.ghost {
+            let ghost_circle = graphics::Mesh::new_circle(ctx,graphics::DrawMode::fill(),ggez::nalgebra::Point2::new(0.0,0.0),ball.radius,2.0,[0.0,0.0,0.0,0.5].into())?;
             graphics::draw(ctx,&ghost_circle,(ball.pos,))?;
         }
         graphics::present(ctx)?;
@@ -163,7 +168,7 @@ impl EventHandler for World{
     }
     fn mouse_button_down_event(&mut self, _ctx: &mut Context,button: MouseButton, x: f32, y: f32){
         match button {
-            MouseButton::Left => self.ghost = Some(Ball{pos:Point2::new(x,y),dir:Vector2::new(0.0,0.0)}),
+            MouseButton::Left => self.ghost = Some(Ball{pos:Point2::new(x,y),dir:Vector2::new(0.0,0.0),radius:10.0}),
             _ => (),
         }
     }
@@ -176,18 +181,18 @@ impl EventHandler for World{
                     let mut overlap = false;
                     for ball2 in &self.balls {
                         let dr = ball.pos-ball2.pos;
-                        if dr.dot(&dr)<(20.0+20.0)*(20.0+20.0) {
+                        if dr.dot(&dr)<(ball.radius+ball2.radius)*(ball.radius+ball2.radius) {
                             overlap = true;
                         }
                     }
-                    if ball.pos.x < 20.0 || ball.pos.x > 500.0-20.0 ||
-                        ball.pos.y < 20.0 || ball.pos.y > 500.0-20.0 {
+                    if ball.pos.x < ball.radius  || ball.pos.x > 500.0-ball.radius ||
+                        ball.pos.y < ball.radius || ball.pos.y > 500.0-ball.radius {
                             overlap = true;
                         }
                     if overlap {
                         println!("There's already something there.");
                     }else{
-                        self.balls.push(Ball{pos:ball.pos,dir:Vector2::new(xdir,ydir)});
+                        self.balls.push(Ball{pos:ball.pos,dir:Vector2::new(xdir,ydir),radius:ball.radius});
                         println!("Added ball {}",self.balls.len());
                     }
                 }
