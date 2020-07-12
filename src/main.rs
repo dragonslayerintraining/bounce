@@ -30,8 +30,40 @@ enum PhysicsEvent{
     BallBallCollision(usize,usize),
 }
 
+//Returns 2 roots in sorted order, or None if fewer
+fn solve_quadratic(a: f32, b: f32, c: f32) -> Option<(f32,f32)>{
+    if a == 0.0 {return None;}
+    let discr = b*b-4.0*a*c;
+    if discr <= 0.0 {return None;}
+    //Numerically stable formulas
+    if b >= 0.0 {
+        let tmp = (-b-discr.sqrt())/2.0;
+        return Some((tmp/a,c/tmp));
+    }else{
+        let tmp = (-b+discr.sqrt())/2.0;
+        return Some((c/tmp,tmp/a));
+    }
+}
+
 impl World{
     fn new(_ctx:&mut Context) -> World{
+        /*
+        //Useful for reproducibility
+        let mut balls = vec![];
+        for i in 0..5 {
+            for j in 0..5 {
+                let x = (i as f32)*80.0+50.0;
+                let y = (j as f32)*80.0+50.0;
+                balls.push(Ball{pos:Point2::new(x,y),dir:Vector2::new(0.0,0.0)});
+            }
+        }
+        balls.push(Ball{pos:Point2::new(50.0,450.0),dir:Vector2::new(-10.0,50.0)});
+        
+        World{
+            balls: balls,
+            ghost: None,
+        }
+        */
         World{
             balls: vec![],
             ghost: None,
@@ -76,23 +108,19 @@ impl World{
                     let a = reldir.dot(&reldir);
                     let b = 2.0*reldir.dot(&relpos);
                     let c = relpos.dot(&relpos)-(20.0+20.0)*(20.0+20.0);
-                    //Compute disriminant
-                    let discr = b*b-4.0*a*c;
-                    //If no zeros, ignore
-                    if discr < 0.0 {continue;}
-                    //Compute zeros
-                    //With current trajectory, balls will overlap between t=t1 and t=t2
-                    let t1 = (-b-discr.sqrt())/2.0/a;
-                    let t2 = (-b+discr.sqrt())/2.0/a;
+                    if let Some((t1,t2)) = solve_quadratic(a,b,c) {
+                    assert!(t1<=t2);
                     //Balls should never actually overlap
                     //But rounding error can be a problem here
-                    if t1 < -0.001 && t2 > 0.001 { panic!("Overlapping balls! {}..{}",t1,t2); }
+                    if t1 < -0.0 && t2 > 0.00001 { println!("Overlapping balls! t={}..{}",t1,t2); }
                     //If no overlap in the future, ignore
-                    if t2 < 0.001 {continue;}
+                    if t1 <= 0.0 {continue;}
                     //Register collision
                     if til > t1 { til=t1; ev = PhysicsEvent::BallBallCollision(i,j); }
+                    }
                 }
             }
+            assert!(til>=0.0);
             self.simple_update(til);
             dt-=til;
             match ev {
@@ -101,9 +129,10 @@ impl World{
                 PhysicsEvent::BallVWallCollision(i) => self.balls[i].dir.y *= -1.0,
                 PhysicsEvent::BallBallCollision(i,j) => {
                     assert!(i!=j);
-                    //self.balls[i].dir=Vector2::new(0.0,0.0);
-                    //self.balls[j].dir=Vector2::new(0.0,0.0);
-                    let bouncedir = (self.balls[j].pos-self.balls[i].pos)/(20.0+20.0);
+                    //In the absence of rounding error, ||balls[i].pos-balls[j].pos|||=R1+R2
+                    //But there is rounding error
+                    let bouncedir = self.balls[j].pos-self.balls[i].pos;
+                    let bouncedir = bouncedir/bouncedir.dot(&bouncedir).sqrt();
                     let reldir = self.balls[j].dir-self.balls[i].dir;
                     let impulse = bouncedir.dot(&reldir)*bouncedir;
                     self.balls[i].dir+=impulse;
@@ -155,6 +184,7 @@ impl EventHandler for World{
                         println!("There's already something there.");
                     }else{
                         self.balls.push(Ball{pos:ball.pos,dir:Vector2::new(xdir,ydir)});
+                        println!("Added ball {}",self.balls.len());
                     }
                 }
                 self.ghost = None;
