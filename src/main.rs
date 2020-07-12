@@ -17,6 +17,7 @@ struct Ball{
     pos: Point2<f32>,
     dir: Vector2<f32>,
     radius: f32,
+    mass: f32,
 }
 
 struct World{
@@ -131,14 +132,17 @@ impl World{
                 PhysicsEvent::BallVWallCollision(i) => self.balls[i].dir.y *= -1.0,
                 PhysicsEvent::BallBallCollision(i,j) => {
                     assert!(i!=j);
+                    let ball1 = &self.balls[i];
+                    let ball2 = &self.balls[j];
                     //In the absence of rounding error, ||balls[i].pos-balls[j].pos|||=R1+R2
                     //But there is rounding error
-                    let bouncedir = self.balls[j].pos-self.balls[i].pos;
+                    let bouncedir = ball2.pos-ball1.pos;
                     let bouncedir = bouncedir/bouncedir.dot(&bouncedir).sqrt();
-                    let reldir = self.balls[j].dir-self.balls[i].dir;
-                    let impulse = bouncedir.dot(&reldir)*bouncedir;
-                    self.balls[i].dir+=impulse;
-                    self.balls[j].dir-=impulse;
+                    let comdir = (ball1.dir*ball1.mass+ball2.dir*ball2.mass)/(ball1.mass+ball2.mass);
+                    let reldir1 = (ball1.dir-comdir).dot(&bouncedir);
+                    let reldir2 = (ball2.dir-comdir).dot(&bouncedir);
+                    self.balls[i].dir-=bouncedir*reldir1*(1.0+1.0);
+                    self.balls[j].dir-=bouncedir*reldir2*(1.0+1.0);
                 }
             }
         }
@@ -168,7 +172,7 @@ impl EventHandler for World{
     }
     fn mouse_button_down_event(&mut self, _ctx: &mut Context,button: MouseButton, x: f32, y: f32){
         match button {
-            MouseButton::Left => self.ghost = Some(Ball{pos:Point2::new(x,y),dir:Vector2::new(0.0,0.0),radius:10.0}),
+            MouseButton::Left => self.ghost = Some(Ball{pos:Point2::new(x,y),dir:Vector2::new(0.0,0.0),radius:10.0,mass:10.0}),
             _ => (),
         }
     }
@@ -192,7 +196,7 @@ impl EventHandler for World{
                     if overlap {
                         println!("There's already something there.");
                     }else{
-                        self.balls.push(Ball{pos:ball.pos,dir:Vector2::new(xdir,ydir),radius:ball.radius});
+                        self.balls.push(Ball{pos:ball.pos,dir:Vector2::new(xdir,ydir),radius:ball.radius,mass:ball.radius*ball.radius});
                         println!("Added ball {}",self.balls.len());
                     }
                 }
